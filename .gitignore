@@ -1,8 +1,30 @@
 # Python кэш
 __pycache__/
+*.pyc
+*.pyo
+*.pyd
 
 # Виртуальное окружение
 .venv/
+venv/
+ENV/
 
 # Конфиденциальные данные
-config.py 
+config.py
+.env
+
+# Файлы сессий
+*.session
+*.session-journal
+
+# Пользовательские настройки
+user_settings.json
+
+# Системные файлы
+.DS_Store
+.idea/
+.vscode/
+
+# Временные файлы
+*.log
+*.tmp
