@@ -1,12 +1,17 @@
+import os
+
+# Получаем конфигурацию из переменных окружения
+BOT_TOKEN = os.environ.get('BOT_TOKEN')
+API_ID = int(os.environ.get('API_ID', 0))
+API_HASH = os.environ.get('API_HASH')
+
 from telegram import Update, InputMediaPhoto
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
 from telethon import TelegramClient, events
-from config import BOT_TOKEN, API_ID, API_HASH
 import logging
 import asyncio
 import re
 from typing import Optional, Set, List, Dict
-import os
 from storage import UserSettingsStorage
 import base64
 
