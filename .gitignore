@@ -10,10 +10,9 @@ venv/
 ENV/
 
 # Конфиденциальные данные
-config.py
 .env
 
-# Файлы сессий
+# Файлы сессий Telethon
 *.session
 *.session-journal
 

@@ -1,19 +1,12 @@
 import os
-
-# Получаем конфигурацию из переменных окружения
-BOT_TOKEN = os.environ.get('BOT_TOKEN')
-API_ID = int(os.environ.get('API_ID', 0))
-API_HASH = os.environ.get('API_HASH')
-
+from telethon import TelegramClient, events
 from telegram import Update, InputMediaPhoto
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
-from telethon import TelegramClient, events
 import logging
 import asyncio
 import re
 from typing import Optional, Set, List, Dict
 from storage import UserSettingsStorage
-import base64
 
 # Настраиваем логирование
 logging.basicConfig(
@@ -21,6 +14,11 @@ logging.basicConfig(
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
+
+# Получаем конфигурацию из переменных окружения
+BOT_TOKEN = os.environ.get('BOT_TOKEN')
+API_ID = int(os.environ.get('API_ID', 0))
+API_HASH = os.environ.get('API_HASH')
 
 application: Optional[Application] = None
 client: Optional[TelegramClient] = None
@@ -306,63 +304,63 @@ async def forward_message_to_subscribers(message):
         logger.error(f"Ошибка в forward_message_to_subscribers: {e}")
 
 async def main():
-    """Запуск бота"""
+    """Основная функция запуска бота"""
     global application, client
     
-    try:
-        # Инициализация Telethon клиента
-        logger.info("Инициализация Telethon клиента...")
-        session_data = os.environ.get('TELETHON_SESSION')
-        if session_data:
-            # Декодируем и сохраняем сессию во временный файл
-            session_file = 'bot_session.session'
-            with open(session_file, 'wb') as f:
-                f.write(base64.b64decode(session_data))
+    # Инициализация бота
+    application = Application.builder().token(BOT_TOKEN).build()
+    
+    # Инициализация клиента Telethon
+    client = TelegramClient('bot_session', API_ID, API_HASH)
+    
+    # Добавляем обработчики команд
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("channels_list", channels_list))
+    application.add_handler(CommandHandler("channels_edit", channels_edit))
+    application.add_handler(CommandHandler("keywords_list", keywords_list))
+    application.add_handler(CommandHandler("keywords_edit", keywords_edit))
+    application.add_handler(CommandHandler("stop", stop))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+    
+    # Запускаем клиент Telethon
+    await client.start()
+    
+    # Добавляем обработчик новых сообщений
+    @client.on(events.NewMessage())
+    async def handle_new_message(event):
+        try:
+            # Получаем информацию о чате
+            chat = await event.get_chat()
+            if not hasattr(chat, 'username'):
+                return
+                
+            channel_username = f"@{chat.username}"
             
-            client = TelegramClient(session_file, API_ID, API_HASH)
-        else:
-            raise ValueError("Отсутствует TELETHON_SESSION")
-        
-        # Добавляем обработчик событий Telethon
-        @client.on(events.NewMessage)
-        async def handle_new_message(event):
-            if event.message:
-                await forward_message_to_subscribers(event.message)
+            # Проверяем все активные подписки
+            for user_id, settings in storage.get_all_settings().items():
+                if not settings.get('active', False):
+                    continue
+                    
+                if channel_username not in settings.get('channels', set()):
+                    continue
+                    
+                # Получаем текст сообщения
+                message_text = ""
+                if event.message.text:
+                    message_text = event.message.text
+                elif event.message.caption:
+                    message_text = event.message.caption
+                
+                # Проверяем наличие ключевых слов
+                if any(keyword.lower() in message_text.lower() 
+                       for keyword in settings.get('keywords', set())):
+                    await forward_formatted_message(event.message, user_id)
+                    
+        except Exception as e:
+            logger.error(f"Ошибка при обработке нового сообщения: {e}")
+    
+    # Запускаем бота
+    await application.run_polling()
 
-        # Инициализация PTB
-        application = Application.builder().token(BOT_TOKEN).build()
-        
-        # Добавляем обработчики команд
-        application.add_handler(CommandHandler("start", start))
-        application.add_handler(CommandHandler("channels_list", channels_list))
-        application.add_handler(CommandHandler("channels_edit", channels_edit))
-        application.add_handler(CommandHandler("keywords_list", keywords_list))
-        application.add_handler(CommandHandler("keywords_edit", keywords_edit))
-        application.add_handler(CommandHandler("stop", stop))
-        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
-        
-        # Запускаем оба клиента
-        await client.start()
-        await application.initialize()
-        await application.start()
-        
-        # Запускаем polling
-        await application.updater.start_polling()
-        await asyncio.Event().wait()
-        
-    except Exception as e:
-        logger.error(f"Критическая ошибка: {e}")
-        raise e
-    finally:
-        if application:
-            await application.stop()
-        if client:
-            await client.disconnect()
-
-if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        logger.info("Бот остановлен пользователем")
-    except Exception as e:
-        logger.error(f"Неожиданная ошибка: {e}")
+if __name__ == '__main__':
+    asyncio.run(main())
